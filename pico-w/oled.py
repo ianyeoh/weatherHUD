@@ -1,5 +1,6 @@
 import time
 import framebuf
+import uasyncio
 from machine import Pin, SPI
 
 
@@ -94,6 +95,24 @@ class OLED_1inch3(framebuf.FrameBuffer):
         self.writeCMD(0x8a)    # set DC-DC enable (a=0:disable; a=1:enable)
         self.writeCMD(0XAF)
     
+    async def scrollText(self, text, x, y, width, speed):
+        text_len = len(text) * 8
+
+        if text_len > width:
+            textFrame = framebuf.FrameBuffer(bytearray(8 * width), width, 8, framebuf.MONO_VLSB)
+            
+            while True:
+                for i in range(width, -text_len, -speed):
+                    textFrame.fill(self.black)
+                    textFrame.text(text, i, 0, self.white)
+                    self.blit(textFrame, x, y)
+                    self.show()
+                    await uasyncio.sleep(0.1)
+        else:
+            self.rect(x, y, width, 8, self.black, True)
+            self.text(text, x, y, self.white)
+            self.show()
+            
     def clearDisplay(self):
         self.fill(self.black)
         self.show()

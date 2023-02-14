@@ -11,7 +11,6 @@ import ntp_aedt as aedt
 OLED = oled.OLED_1inch3()
 
 # Network connectivity
-# Enter your WLAN ssid and password here
 ssid = ''
 password = ''
 
@@ -61,12 +60,14 @@ def initialise():
 
 def pgSummary(data): 
     OLED.blit(data['icon'], 0, 0)
-    OLED.text(data['condition'], 0, 42, OLED.white)
+    condition = uasyncio.create_task(OLED.scrollText(data['condition'], 0, 42, OLED.width, 5))
     OLED.text(f'{data['location'].upper()}', 48, 6)
     OLED.text('F{:2d} |C{:2d}'.format(data['temp_c'], data['pico_temp_c']), 48, 15)
     OLED.ellipse(76, 16, 2, 2, OLED.white)
     OLED.ellipse(116, 16, 2, 2, OLED.white)
     OLED.text('H{:2d}%|{:d}mm'.format(data['humidity'], data['precip_mm']), 48, 25)
+    
+    return [condition]
     
 def pgTemperature(data):
     OLED.blit(weather.thermometer, 0, 6)
@@ -77,12 +78,14 @@ def pgTemperature(data):
     OLED.ellipse(93, 30, 2, 2, OLED.white)
     OLED.text(f'FL |{data['feelslike_c']}', 42, 38)
     OLED.ellipse(93, 40, 2, 2, OLED.white)
+    return []
     
 def pgWind(data):
     OLED.blit(weather.wind, 0, 8)
     OLED.text('WIND', 44, 12)
     OLED.text(f'Speed|Dir', 44, 24)
     OLED.text('{:2d}kph|{:s}'.format(data['wind_kph'], 'N'), 44, 34)
+    return []
     
 def pgRain(data):
     OLED.blit(weather.raindrop, 0, 6)
@@ -90,12 +93,14 @@ def pgRain(data):
     OLED.text(f'{data['precip_mm']}mm/h', 44, 18)
     OLED.text('HUMIDITY', 44, 28)
     OLED.text(f'{data['humidity']}%', 44, 38)
+    return []
     
 def pgFooter():
     OLED.rect(0, 52, 128, 12, OLED.black, True)
     OLED.hline(0, 52, 128, OLED.white)
     OLED.hline(0, 53, 128, OLED.white)
     OLED.text(f'{aedt.getTime()} {aedt.getDate()}', 0, 56)
+    return []
 
 def pgNumber(pg, pg_len):
     OLED.text(f'{pg}/{pg_len}', 104, 0)
@@ -112,7 +117,7 @@ async def updateData(q, delay):
         await uasyncio.sleep(delay)
         data = weather.getWeatherData()
         await q.put(data)
-
+    
 async def main():
     data = initialise()
     
@@ -158,8 +163,11 @@ async def main():
         
         # Update page on page switch or data model change
         if update:
+            for task in tasks:
+                task.cancel()
+            
             OLED.clearDisplay()
-            pages[pg](data)
+            tasks = pages[pg](data)
             pgNumber(pg + 1, len(pages))
             pgFooter()
             OLED.show()
